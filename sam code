@@ -1,0 +1,50 @@
+import discord
+import youtube_dl
+
+client = discord.Client()
+
+@client.event
+async def on_ready():
+    print('Logged in as {0.user}'.format(client))
+
+@client.event
+async def on_message(message):
+    if message.content.startswith('!play'):
+        # Получаем ссылку на YouTube-видео из сообщения
+        url = message.content.split()[1]
+
+        # Создаем объект youtube_dl для загрузки аудио из видео
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'quiet': True,
+            'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+            'nocheckcertificate': True,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=False)
+            audio_url = info_dict.get('url', None)
+
+        # Получаем голосовой канал пользователя, который отправил сообщение
+        voice_channel = message.author.voice.channel
+        if voice_channel is None:
+            await message.channel.send("Вы должны находиться в голосовом канале, чтобы использовать эту команду.")
+            return
+
+        # Подключаем бота к голосовому каналу пользователя
+        voice_client = await voice_channel.connect()
+
+        # Воспроизводим аудио из YouTube-видео в голосовом канале
+        source = discord.FFmpegPCMAudio(audio_url)
+        voice_client.play(source)
+
+        # Ожидаем, пока музыка не закончится, затем отключаемся от голосового канала
+        while voice_client.is_playing():
+            await asyncio.sleep(1)
+        await voice_client.disconnect()
+
+client.run('ваш_токен_бота')
